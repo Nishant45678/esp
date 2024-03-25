@@ -1,0 +1,77 @@
+#include <ESP8266WiFi.h>
+#include <WiFiClient.h>
+#include <ESP8266WebServer.h>
+#include <ArduinoJson.h>
+
+// Replace with your network credentials
+const char* ssid = "ledController";
+const char* password = "7890";
+
+// Create an instance of the server
+ESP8266WebServer server(80);
+
+// Set the pins for the leds
+const int led[] = {D0,D1,D2,D3,D4};
+
+const int n = sizeof(led)/sizeof(led[0]);
+
+void setup() {
+  // Initialize Serial Monitor
+  Serial.begin(9600);
+
+  // Initialize leds
+  
+  for(int i=0;i<n;i++){
+    pinMode(led[i], OUTPUT);
+    digitalWrite(led[i], LOW);
+  };//forloop
+
+  // Connect to WiFi network
+  WiFi.softAP(ssid, password);
+  IPAddress ipAddress = WiFi.softAPIP();
+  Serial.print("Access Point IP address: ");
+  Serial.println(ipAddress);
+
+  // Set the server content type
+  
+   server.on("/fingercount", HTTP_GET, [](){
+  // Get the JSON data from the request
+    String jsonStr = server.arg("plain");
+    
+    // Parse the JSON data
+    StaticJsonDocument<64> doc;
+    DeserializationError error = deserializeJson(doc, jsonStr);
+    
+    // Check for parsing errors
+    if (error) {
+      Serial.print("deserializeJson() failed: ");
+      Serial.println(error.f_str());
+      server.send(400, "text/plain", "Bad Request");
+      return;
+    }//ifblock
+    
+    // Extract the count from the JSON data
+    int count = doc["count"];
+
+    // Update the LED states based on the count
+    for(int i = 0; i < n; i++) {
+      digitalWrite(led[i], i < count);
+    }//forloop
+
+    server.send(200, "text/plain", "OK");
+  });//serveron
+
+  // Serve the HTML page
+  server.on("/", HTTP_GET, [](){
+    String html = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><title>Finger counter</title></head><body><video style=\"display: none;\" id=\"video\" width=\"640\" height=\"480\" autoplay></video><canvas id=\"canvas\" width=\"640\" height=\"480\"></canvas><p id=\"resulttext\"></p><p>(for right hand)fingers counted <span id=\"result\">0</span></p><script src=\"https://cdn.jsdelivr.net/npm/@tensorflow/tfjs\"></script><script src=\"https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose\"></script><script>const canvasElement = document.getElementById('canvas');const ctx = canvasElement.getContext('2d');const result = document.getElementById(\"result\");const resultText = document.getElementById(\"resultText\");let model;let video;let hand;const fingerTips = [4, 8, 12, 16, 20];const main = async () => {video = await setupCamera();model = await handpose.load();detectHands();};const setupCamera = async () => {try {const video = document.getElementById('video');const stream = await navigator.mediaDevices.getUserMedia({video: true,audio: false});video.srcObject = stream;await video.play();return video;} catch (error) {alert(error);}};const detectHands = async () => {setInterval(async () => {ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);ctx.drawImage(video, 0, 0);const predictions = await model.estimateHands(video);if (predictions.length > 0) {hand = predictions[0];drawHand(hand);const fingerCount = countFingers(hand);result.innerText = fingerCount;sendFingerCount(fingerCount);}}, 500);};const drawHand = (hand) => {for (let i = 0; i < hand.landmarks.length; i++) {const [x, y] = hand.landmarks[i];ctx.beginPath();ctx.arc(x, y, 5, 0, 2 * Math.PI);ctx.fillStyle = \"red\";ctx.fill();}};const countFingers = (hand) => {let fingerCount = 0;if ((hand.landmarks[2][0] < hand.landmarks[4][0])) {fingerCount++;};for (let i = 1; i < fingerTips.length; i++) {if (hand.landmarks[fingerTips[i]][1] < hand.landmarks[fingerTips[i] - 2][1]) {fingerCount++;};};return fingerCount;};const sendFingerCount = (count) => {const xhr = new XMLHttpRequest();xhr.open(\"POST\", \"/fingercount\", true);xhr.setRequestHeader(\"Content-Type\", \"application/json\");xhr.send(JSON.stringify({ count: count }));};main();</script></body></html>";
+    
+    server.send(200, "text/html",html);
+  });//serveron
+  // Start the server
+  server.begin();
+}//setup
+
+void loop() {
+  // Handle client requests
+  server.handleClient();
+}//loop
