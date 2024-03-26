@@ -1,0 +1,28 @@
+  body{
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f0f0f0;
+  }
+
+#canvas{
+  border-radius: 30px;
+  box-shadow: 0 0 1em black;
+}
+
+#para{
+  
+  font-weight: 500;
+
+}
+
+
+#result{
+  color: rgb(8, 43, 199);
+font-size: x-large;
+}
